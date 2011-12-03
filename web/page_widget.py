@@ -1,6 +1,10 @@
 from gi.repository import WebKit, Gtk, GLib, Gio, GObject, GdkPixbuf, Gdk
 import cairo
 from widgets import *
+from zeitgeist.client import ZeitgeistClient
+from zeitgeist.datamodel import Event, Subject, Interpretation, Manifestation
+
+ZG = ZeitgeistClient()
 
 class PageView(View):
     def __init__(self):
@@ -16,11 +20,15 @@ class PageView(View):
         
         self.webview.connect("notify::title", self.toolbar._on_title_changed)
         self.webview.connect("notify::load-status", self.toolbar._on_uri_changed)
+        self.webview.connect("notify::load-status", self._on_uri_changed)
         self.toolbar.backBtn.connect("clicked", lambda x: self.webview.go_back())
         self.toolbar.fwdBtn.connect("clicked", lambda x: self.webview.go_forward())
         self.toolbar.titleBtn.connect("clicked", self._on_title_btn_clicked)
         self.toolbar.uriEntry.connect("focus-out-event", self._on_entry_focus_out)
         self.toolbar.uriEntry.connect("activate", self._on_activate)
+        self.current_uri = None
+        self.current_title = None
+        self.current_dom = None
 
     def get_title(self):
         return self.webview.get_title()
@@ -29,13 +37,12 @@ class PageView(View):
         text = widget.get_text()
         if not text.startswith("http://") and not text.startswith("https://")\
             and not text.startswith("ftp://"):
-            self.widget.set_text("http://"+text)
+            widget.set_text("http://"+text)
             text = "http://"+text
         print text
         self.webview.open(text)
         
     def _on_entry_focus_out(self, widget, event):
-        print "----"
         self.toolbar.uriEntry.hide()
         self.toolbar.titleBtn.show()
         self.toolbar._on_style_changed(widget)
@@ -46,7 +53,39 @@ class PageView(View):
         self.toolbar.uriEntry.set_text(self.webview.get_uri())
         self.toolbar.hbox2.set_size_request(-1, -1)
         self.toolbar.uriEntry.grab_focus()
-        
+    
+    def _on_uri_changed(self, webview, load_status):
+        if self.webview.get_property("load-status") ==\
+            WebKit.LoadStatus.FINISHED:
+            if self.current_uri != self.webview.get_uri():
+                if self.current_uri:
+                    event = Event()
+                    event.interpretation = Interpretation.LEAVE_EVENT
+                    event.manifestation = Manifestation.USER_ACTIVITY
+                    event.actor = "application://web.desktop"
+                    subject = Subject()
+                    subject.uri = self.current_uri
+                    subject.mimetype = "text/html"
+                    subject.text = self.current_title
+                    subject.interpretation = Interpretation.WEBSITE
+                    subject.manifestation = Manifestation.REMOTE_PORT_ADDRESS
+                    event.subjects = [subject]
+                    ZG.insert_event(event)
+                self.current_uri = self.webview.get_uri()
+                self.current_title = self.webview.get_title()
+                print "===>", self.current_title 
+                event = Event()
+                event.interpretation = Interpretation.ACCESS_EVENT
+                event.manifestation = Manifestation.USER_ACTIVITY
+                event.actor = "application://web.desktop"
+                subject = Subject()
+                subject.uri = self.current_uri
+                subject.mimetype = "text/html"
+                subject.text = self.current_title
+                subject.interpretation = Interpretation.WEBSITE
+                subject.manifestation = Manifestation.REMOTE_PORT_ADDRESS
+                event.subjects = [subject]
+                ZG.insert_event(event)
 
 class PageToolbar(Toolbar):
     def __init__(self):
@@ -139,6 +178,20 @@ class Pages(Gtk.Notebook):
         self.append_page(page, Gtk.Label("uri"))
         
         GObject.idle_add(lambda: self.set_current_page(self.page_num(page)))
+        self.show_all()
+
+class PageButton(Gtk.Button):
+    def __init__(self, subject):
+        Gtk.Button.__init__(self)
+        box = Gtk.Box(orientation = Gtk.Orientation.VERTICAL)
+        self.subject = subject
+        label = Gtk.Label()
+        print subject.text
+        label.set_markup("<b>%s</b>"%subject.text)
+        label.set_ellipsize(2)
+        box.pack_end(label, False, False, 0)
+        self.set_size_request(202, 144)
+        self.add(box)
         self.show_all()
 
 class PageOverviewWidget(Gtk.Button):

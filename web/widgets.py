@@ -24,17 +24,18 @@ class ItemGrid(Gtk.Box):
         self.widgets = []
         
     def reset(self):
+        print "==>"
         self.widgets = []
         for widget in self.get_children():
             self.remove(widget)
         
     def add_page(self, widget):
-        index = len(self.widgets)%5
+        index = len(self.widgets)%4
         if index == 0:
             hbox = Gtk.Box()
             hbox.set_homogeneous(True)
             self.pack_start(hbox, False, False, 6)
-            for i in xrange(5):
+            for i in xrange(4):
                 hbox.pack_end(Gtk.Label(), False, False, 6)
         
         hbox = self.get_children()[-1]

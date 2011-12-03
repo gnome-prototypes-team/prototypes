@@ -3,7 +3,8 @@
 
 from gi.repository import Gtk, GLib, GObject
 from home_widget import HomeView
-from page_widget import Pages, PageOverviewWidget
+from page_widget import Pages, PageOverviewWidget, ZG, PageButton
+from zeitgeist.datamodel import Event, Subject
 
 class Window(Gtk.Window):
     def __init__(self):
@@ -36,14 +37,34 @@ class Window(Gtk.Window):
         
     def _on_view_pages(self, widget):
         self.home.reset()
+        uris = []
         for pIndex in xrange(self.pages.get_n_pages()):
             self.pages.set_current_page(pIndex)
             page = self.pages.get_nth_page(pIndex)
             overviewPage = PageOverviewWidget(page)
             overviewPage.connect("clicked", self._on_page_clicked)
             self.home.add_page(overviewPage)
+            uris.append(page.webview.get_uri())
         self.home.show_all()
         self.box.set_current_page(0)
+        
+        def callback(events):
+            self.home.recentDashboard.recentPages.reset()
+            for event in events:
+                page = PageButton(event.subjects[0])
+                print event.subjects[0].uri
+                self.home.recentDashboard.recentPages.add_page(page)
+            self.home.show_all()
+        event = Event()
+        event.actor = "application://web.desktop"
+        event.subjects = []
+        for uri in uris:
+            if uri:
+                subject = Subject()
+                subject.uri = "!"+uri
+                event.subjects.append(subject)
+        print event
+        ZG.find_events_for_template(event, callback, result_type=2)
     
     def _on_page_clicked(self, widget):
         self.box.set_current_page(1)

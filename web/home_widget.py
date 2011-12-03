@@ -18,6 +18,11 @@ class ToggleButton(Gtk.ToggleButton):
             self.label.set_markup("  %s  " %self.text)
 
 class HomeToolbar(Toolbar):
+    __gsignals__ = {
+        "switched": (GObject.SIGNAL_RUN_FIRST,
+                   GObject.TYPE_NONE,
+                   (GObject.TYPE_INT,)),
+                   }
     def __init__(self):
         Toolbar.__init__(self)
         
@@ -51,7 +56,12 @@ class HomeToolbar(Toolbar):
             for btn in self.toggleBtns:
                 if not btn == widget:
                     btn.set_active(False)
+                else:
+                    if not btn.get_active():
+                        btn.set_active(True)
             self._is_busy = False
+            self.emit("switched", self.toggleBtns.index(widget))
+            
 
 class HomeView(View):
     def __init__(self, pages):
@@ -66,18 +76,41 @@ class HomeView(View):
         self.toolbar = HomeToolbar()
         self.pack_start(self.toolbar, False, False, 0)
         
-        self.dashboard = RecentDashboard()
+
         
+        self.notebook = Gtk.Notebook()
+        self.notebook.set_show_tabs(False)
+        
+        self.recentDashboard = RecentDashboard()
         scrolledWindow = Gtk.ScrolledWindow()
         scrolledWindow.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-        scrolledWindow.add_with_viewport(self.dashboard)
-        self.pack_start(scrolledWindow, True, True, 0)
+        scrolledWindow.add_with_viewport(self.recentDashboard)
+        self.notebook.append_page(scrolledWindow, Gtk.Label("Recent"))
+        
+        self.favDashboard = FavoriteDashboard()
+        scrolledWindow = Gtk.ScrolledWindow()
+        scrolledWindow.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        scrolledWindow.add_with_viewport(self.favDashboard)
+        self.notebook.append_page(scrolledWindow, Gtk.Label("Favorties"))
+        
+        self.queueDashboard = QueueDashboard()
+        scrolledWindow = Gtk.ScrolledWindow()
+        scrolledWindow.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        scrolledWindow.add_with_viewport(self.queueDashboard)
+        self.notebook.append_page(scrolledWindow, Gtk.Label("Queue"))
+        
+        self.pack_start(self.notebook, True, True, 0)
+        
+        self.toolbar.connect("switched", self._on_switched)
+        
+    def _on_switched(self, widget, index):
+        self.notebook.set_current_page(index)
         
     def reset(self):
-        self.dashboard.reset()
+        self.recentDashboard.reset()
         
     def add_page(self, page):
-        self.dashboard.add_page(page)
+        self.recentDashboard.add_page(page)
 
 class RecentDashboard(Gtk.Box):
     def __init__(self):
@@ -87,19 +120,26 @@ class RecentDashboard(Gtk.Box):
         self.pack_start(self.openPages, False, False, 0)
         
         self.recentPages = CurrentPages()
-        self.pack_start(self.recentPages, False, False, 1)
-        
-        self.currentPages = CurrentPages()
+        self.pack_start(self.recentPages, False, False, 0)
         
     def add_page(self, page):
         self.openPages.add_page(page)
         
     def reset(self):
         self.openPages.grid.reset()
+        self.recentPages.reset()
 
-class OpenPages(Gtk.Box):
+class FavoriteDashboard(Gtk.Box):
     def __init__(self):
-        Gtk.Box.__init__(self)
+        Gtk.Box.__init__(self, orientation=Gtk.Orientation.VERTICAL)
+
+class QueueDashboard(Gtk.Box):
+    def __init__(self):
+        Gtk.Box.__init__(self, orientation=Gtk.Orientation.VERTICAL)
+        
+class OpenPages(Gtk.Toolbar):
+    def __init__(self):
+        Gtk.Toolbar.__init__(self)
         self.get_style_context().add_class("primary-toolbar");
         
         item = Gtk.ToolItem()
@@ -115,7 +155,8 @@ class OpenPages(Gtk.Box):
         vbox.pack_start(box, False, False, 9)
         item.add(vbox)
         item.set_expand(True)
-        self.pack_start(item, True, True, 0)
+        #self.pack_start(item, True, True, 0)
+        self.insert(item, 0)
         
         self.grid = ItemGrid()
         vbox.pack_start(self.grid, True, True, 0)
@@ -126,6 +167,7 @@ class OpenPages(Gtk.Box):
 class CurrentPages(ItemGrid):
     def __init__(self):
         ItemGrid.__init__(self)
+        self.set_border_width(3)
 
 class SearchEntry(Gtk.Entry):
     __gsignals__ = {
